@@ -283,6 +283,7 @@ class StableDiffusionGuidance(BaseObject):
             "t_orig": t,
             "latents_noisy": latents_noisy,
             "noise_pred": noise_pred,
+            "image_denoised": image_denoised,
         }
 
         return grad, grad_img, guidance_eval_utils
@@ -451,6 +452,7 @@ class StableDiffusionGuidance(BaseObject):
             "grad_norm": grad.norm(),
             "min_step": self.min_step,
             "max_step": self.max_step,
+            "image_denoised": guidance_eval_utils["image_denoised"],
         }
 
         if self.cfg.use_img_loss:

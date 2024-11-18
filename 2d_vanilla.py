@@ -41,7 +41,7 @@ prompt = "An astronaut riding a horse in space"
 
 # stable diffusion 
 config = {
-    'max_iters': 1000,
+    'max_iters': 250,
     'seed': 42,
     'scheduler': 'cosine',
     'mode': 'latent',
@@ -51,15 +51,18 @@ config = {
     },
     'guidance_type': 'stable-diffusion-guidance',
     'guidance': {
-        'half_precision_weights': False,
+        'half_precision_weights': True,
         'guidance_scale': 100.,
         'pretrained_model_name_or_path': 'runwayml/stable-diffusion-v1-5',
+        # 'pretrained_model_name_or_path': 'stabilityai/stable-diffusion-2-base',
         'grad_clip': None,
         'view_dependent_prompting': False,
+        'token_merging': True,
+        'enable_attention_slicing': True,
     },
     'image': {
-        'width': 64,
-        'height': 64,
+        'width': 256,
+        'height': 256,
     }
 }
 
@@ -100,6 +103,10 @@ with torch.no_grad():
 guidance = threestudio.find(config['guidance_type'])(config['guidance'])
 prompt_processor = threestudio.find(config['prompt_processor_type'])(config['prompt_processor'])
 prompt_processor.configure_text_encoder()
+guidance.enable_attention_slicing=True
+guidance.enable_memory_efficient_attention=True
+guidance.token_merging=True
+# guidance.enable_sequential_cpu_offload=True
 
 def figure2image(fig):
     buf = io.BytesIO()
@@ -135,6 +142,7 @@ def run(config):
     if mode == 'rgb':
         target = nn.Parameter(torch.rand(1, h, w, 3, device=guidance.device))
     else:
+        assert (h == 64) and (w == 64), "SD latent size should be 64x64"
         target = nn.Parameter(torch.randn(1, h, w, 4, device=guidance.device))
 
     optimizer = torch.optim.AdamW([target], lr=1e-1, weight_decay=0)
@@ -166,7 +174,7 @@ def run(config):
             
             guidance.update_step(epoch=0, global_step=step)
 
-            if step % 5 == 0:
+            if step % 25 == 0:
                 if mode == 'rgb':
                     rgb = target
                     vis_grad = grad[..., :3]
@@ -181,16 +189,21 @@ def run(config):
                 img_rgb = rgb.clamp(0, 1).detach().squeeze(0).cpu().numpy()
                 img_grad = vis_grad.clamp(0, 1).detach().squeeze(0).cpu().numpy()
                 img_grad_norm = vis_grad_norm.clamp(0, 1).detach().squeeze(0).cpu().numpy()
+                img_rgb_denoised = loss["image_denoised"].detach().squeeze(0).cpu().permute(1,2,0).numpy()
 
                 fig, ax = plt.subplots(1, 3, figsize=(15, 5))
                 ax[0].imshow(img_rgb)
                 ax[1].imshow(img_grad)
-                ax[2].imshow(img_grad_norm)
+                ax[2].imshow(img_rgb_denoised)
                 ax[0].axis('off')
                 ax[1].axis('off')
                 ax[2].axis('off')
+                ax[0].set_title("rgb")
+                ax[1].set_title("grad")
+                ax[2].set_title("rgb target")
                 clear_output(wait=True)
-                plt.show()
+                plt.savefig(f"logs/2d_{config['mode']}/{step}.png")
+                plt.close()
                 img_array.append(figure2image(fig))
     except KeyboardInterrupt:
         pass
@@ -218,4 +231,5 @@ def run(config):
 
 config['mode'] = 'latent'
 # config['mode'] = 'rgb'
+os.makedirs(f"logs/2d_{config['mode']}", exist_ok=True)
 run(config)

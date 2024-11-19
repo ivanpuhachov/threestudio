@@ -37,11 +37,11 @@ def seed_everything(seed):
 # To specify the gpu you want to use, we recommend to start the jupyter server with CUDA_VISIBLE_DEVICES=<gpu_ids>.
 # threestudio.utils.base.get_device = lambda: torch.device('cuda:0') # hack the cuda device
 
-prompt = "An astronaut riding a horse in space"
+prompt = "A DSLR photograph of a hamburger"
 
 # stable diffusion 
 config = {
-    'max_iters': 250,
+    'max_iters': 1000,
     'seed': 42,
     'scheduler': 'cosine',
     'mode': 'latent',
@@ -52,7 +52,7 @@ config = {
     'guidance_type': 'stable-diffusion-guidance',
     'guidance': {
         'half_precision_weights': True,
-        'guidance_scale': 100.,
+        'guidance_scale': 7.5,
         'pretrained_model_name_or_path': 'runwayml/stable-diffusion-v1-5',
         # 'pretrained_model_name_or_path': 'stabilityai/stable-diffusion-2-base',
         'grad_clip': None,
@@ -61,8 +61,8 @@ config = {
         'enable_attention_slicing': True,
     },
     'image': {
-        'width': 256,
-        'height': 256,
+        'width': 64,
+        'height': 64,
     }
 }
 
@@ -91,23 +91,6 @@ config = {
 #     }
 # }
 
-seed_everything(config['seed'])
-
-# just need to rerun the cell when you change guidance or prompt_processor
-guidance = None
-prompt_processor = None
-gc.collect()
-with torch.no_grad():
-    torch.cuda.empty_cache()
-
-guidance = threestudio.find(config['guidance_type'])(config['guidance'])
-prompt_processor = threestudio.find(config['prompt_processor_type'])(config['prompt_processor'])
-prompt_processor.configure_text_encoder()
-guidance.enable_attention_slicing=True
-guidance.enable_memory_efficient_attention=True
-guidance.token_merging=True
-# guidance.enable_sequential_cpu_offload=True
-
 def figure2image(fig):
     buf = io.BytesIO()
     fig.savefig(buf)
@@ -121,6 +104,22 @@ def configure_other_guidance_params_manually(guidance, config):
     guidance.cfg.guidance_scale = config['guidance']['guidance_scale']
 
 def run(config):
+    seed_everything(config['seed'])
+
+    # just need to rerun the cell when you change guidance or prompt_processor
+    guidance = None
+    prompt_processor = None
+    gc.collect()
+    with torch.no_grad():
+        torch.cuda.empty_cache()
+
+    guidance = threestudio.find(config['guidance_type'])(config['guidance'])
+    guidance.enable_attention_slicing=True
+    guidance.enable_memory_efficient_attention=True
+    guidance.token_merging=True
+    # guidance.enable_sequential_cpu_offload=True
+    prompt_processor = threestudio.find(config['prompt_processor_type'])(config['prompt_processor'])
+    prompt_processor.configure_text_encoder()
     # clear gpu memory
     rgb = None
     grad = None
@@ -174,7 +173,7 @@ def run(config):
             
             guidance.update_step(epoch=0, global_step=step)
 
-            if step % 25 == 0:
+            if step % 100 == 0:
                 if mode == 'rgb':
                     rgb = target
                     vis_grad = grad[..., :3]
@@ -229,7 +228,13 @@ def run(config):
             # display(slider)
             display(output)
 
-config['mode'] = 'latent'
-# config['mode'] = 'rgb'
-os.makedirs(f"logs/2d_{config['mode']}", exist_ok=True)
-run(config)
+
+def main():
+    config['mode'] = 'latent'
+    # config['mode'] = 'rgb'
+    os.makedirs(f"logs/2d_{config['mode']}", exist_ok=True)
+    run(config)
+
+
+if __name__ == "__main__":
+    main()

@@ -59,21 +59,24 @@ config = {
     'mode': 'latent',
     'prompt_processor_type': 'stable-diffusion-prompt-processor',
     'prompt_processor': {
-        'pretrained_model_name_or_path': "stabilityai/stable-diffusion-2-1-base",
+        # 'pretrained_model_name_or_path': "stabilityai/stable-diffusion-2-1-base",
+        'pretrained_model_name_or_path': 'runwayml/stable-diffusion-v1-5',
         'prompt': prompt,
         'use_perp_neg': False,
     },
     'guidance_type': 'stable-diffusion-sdi-guidance',
     'guidance': {
-        'pretrained_model_name_or_path': "stabilityai/stable-diffusion-2-1-base",
+        'half_precision_weights': True,
+        # 'pretrained_model_name_or_path': "stabilityai/stable-diffusion-2-1-base",
+        'pretrained_model_name_or_path': 'runwayml/stable-diffusion-v1-5',
         'guidance_scale': 7.5,
         'weighting_strategy': "sds",
         'min_step_percent': 0.02,
         'max_step_percent': 0.98,
         'trainer_max_steps': n_iters,
         'grad_clip': None,
-        'token_merging': True,
-        'enable_attention_slicing': True,
+        # 'token_merging': True,
+        # 'enable_attention_slicing': True,
         # SDI parameters
         'enable_sdi': True,
         'inversion_guidance_scale': -7.5,
@@ -104,9 +107,9 @@ def main():
         torch.cuda.empty_cache()
 
     guidance = threestudio.find(config['guidance_type'])(config['guidance'])
-    guidance.enable_attention_slicing=True
-    guidance.enable_memory_efficient_attention=True
-    guidance.token_merging=True
+    # guidance.enable_attention_slicing=True
+    # guidance.enable_memory_efficient_attention=True
+    # guidance.token_merging=True
     prompt_processor = threestudio.find(config['prompt_processor_type'])(config['prompt_processor'])
     # prompt_processor.configure_text_encoder()
 
@@ -136,6 +139,7 @@ def main():
     num_steps = config['max_iters']
     t_interval = n_iters // t_n_steps
     img_array = []
+    os.makedirs("logs/2d_sdi_kappa/", exist_ok=True)
 
     try:
         for step in tqdm(range(num_steps + 1)):
@@ -144,17 +148,18 @@ def main():
 
             if step % t_interval == 0:
                 guidance_output = guidance(
-                    guidance.decode_latents(latent).permute(0, 2, 3, 1), # project through the decoder to regulirize the latents
-                    prompt_processor(), **batch, test_info=True # rgb_as_latents=True, 
+                    latent,
+                    prompt_processor(), **batch, test_info=True, rgb_as_latents=True,
+                    call_with_defined_noise=noise_pred
                 )
             
             loss = 0.5 * F.mse_loss(latent, guidance_output['target_latent'].detach(), reduction="mean")
             loss.backward()
-            # guidance_output["loss_sdi"].backward()
+
             optimizer.step()
             noise_pred = guidance_output["noise_pred"]
             
-            if step % 100 == 0:
+            if step % t_interval == 0:
                 rgb = guidance.decode_latents(latent).permute(0, 2, 3, 1)
                 img_rgb = rgb.clamp(0, 1).detach().squeeze(0).cpu().numpy()
 
@@ -172,9 +177,10 @@ def main():
                 ax[2].axis('off')
                 ax[3].axis('off')
                 clear_output(wait=True)
+                plt.savefig(f"logs/2d_sdi_kappa/{step}.png")
+                plt.close()
                 # plt.show()
-                plt.savefig(f"logs/2d_sdi_inversion/{step}.png")
-                img_array.append(figure2image(fig))
+                # img_array.append(figure2image(fig))
     except KeyboardInterrupt:
         pass
     finally:

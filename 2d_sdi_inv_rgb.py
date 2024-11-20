@@ -133,13 +133,16 @@ def main():
         guidance_scale=config['guidance']['guidance_scale']
     )
     latents_denoised = guidance.get_x0(init_noise, noise_pred, time).detach()
-    latent = nn.Parameter(latents_denoised)
+    with torch.no_grad():
+        params = guidance.decode_latents(latents_denoised).permute(0, 2, 3, 1)  # B, H, W, C
+        assert params.shape == (1, 512, 512, 3)
+    params = nn.Parameter(params)
 
-    optimizer = torch.optim.Adam([latent], lr=lr, weight_decay=0)
+    optimizer = torch.optim.Adam([params], lr=lr, weight_decay=0)
     num_steps = config['max_iters']
     t_interval = n_iters // t_n_steps
     img_array = []
-    os.makedirs("logs/2d_sdi_inversion/", exist_ok=True)
+    os.makedirs("logs/2d_sdi_inv_rgb/", exist_ok=True)
 
     try:
         for step in tqdm(range(num_steps + 1)):
@@ -147,11 +150,13 @@ def main():
             optimizer.zero_grad()
 
             if step % t_interval == 0:
-                guidance_output = guidance(
-                    guidance.decode_latents(latent).permute(0, 2, 3, 1), # project through the decoder to regulirize the latents
-                    prompt_processor(), **batch, test_info=True # rgb_as_latents=True, 
-                )
+                with torch.no_grad():
+                    guidance_output = guidance(
+                        params,
+                        prompt_processor(), **batch, test_info=True # rgb_as_latents=True, 
+                    )
             
+            latent = guidance.encode_images(params.permute(0, 3, 1, 2))
             loss = 0.5 * F.mse_loss(latent, guidance_output['target_latent'].detach(), reduction="mean")
             loss.backward()
             # guidance_output["loss_sdi"].backward()
@@ -176,7 +181,7 @@ def main():
                 ax[2].axis('off')
                 ax[3].axis('off')
                 clear_output(wait=True)
-                plt.savefig(f"logs/2d_sdi_inversion/{step}.png")
+                plt.savefig(f"logs/2d_sdi_inv_rgb/{step}.png")
                 plt.close()
                 # plt.show()
                 # img_array.append(figure2image(fig))

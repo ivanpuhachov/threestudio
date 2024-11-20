@@ -94,6 +94,17 @@ batch = {
 seed_everything(config['seed'])
 
 def main():
+    # just need to rerun the cell when you change guidance or prompt_processor
+    guidance = None
+    prompt_processor = None
+    gc.collect()
+    with torch.no_grad():
+        torch.cuda.empty_cache()
+
+    guidance = threestudio.find(config['guidance_type'])(config['guidance'])
+    prompt_processor = threestudio.find(config['prompt_processor_type'])(config['prompt_processor'])
+    # prompt_processor.configure_text_encoder()
+
     B = 1
     lr = 1e-1
     t_n_steps = 40

@@ -3,7 +3,9 @@ omegaconf==2.3.0
 jaxtyping
 typeguard
 git+https://github.com/KAIR-BAIR/nerfacc.git@v0.5.2
-git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
+# git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
+# instead, install from source:
+# see https://github.com/threestudio-project/threestudio/issues/440
 diffusers
 transformers
 accelerate
@@ -27,7 +29,9 @@ IPython
 ipywidgets
 
 # deepfloyd
-xformers
+# xformers
+# run instead this:
+# pip3 install -U xformers==0.0.24 --index-url https://download.pytorch.org/whl/cu121
 bitsandbytes==0.38.1
 sentencepiece
 safetensors

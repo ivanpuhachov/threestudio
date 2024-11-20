@@ -93,102 +93,77 @@ batch = {
 
 seed_everything(config['seed'])
 
-# just need to rerun the cell when you change guidance or prompt_processor
-guidance = None
-prompt_processor = None
-gc.collect()
-with torch.no_grad():
-    torch.cuda.empty_cache()
+def main():
+    B = 1
+    lr = 1e-1
+    t_n_steps = 40
 
-guidance = threestudio.find(config['guidance_type'])(config['guidance'])
-prompt_processor = threestudio.find(config['prompt_processor_type'])(config['prompt_processor'])
-# prompt_processor.configure_text_encoder()
-
-B = 1
-lr = 1e-1
-t_n_steps = 40
-
-gc.collect()
-with torch.no_grad():
-    torch.cuda.empty_cache()
-w, h = config['latent']['width'], config['latent']['height']
-
-# Initialization
-time = torch.tensor(B * [999], device=guidance.device)
-init_noise = torch.randn(B, 4, h, w, device=guidance.device) * guidance.scheduler.init_noise_sigma
-noise_pred, _, _ = guidance.predict_noise(
-    init_noise,
-    time,
-    prompt_processor(),
-    **batch,
-    guidance_scale=config['guidance']['guidance_scale']
-)
-latents_denoised = guidance.get_x0(init_noise, noise_pred, time).detach()
-latent = nn.Parameter(latents_denoised)
-
-optimizer = torch.optim.Adam([latent], lr=lr, weight_decay=0)
-num_steps = config['max_iters']
-t_interval = n_iters // t_n_steps
-img_array = []
-
-try:
-    for step in tqdm(range(num_steps + 1)):
-        guidance.update_step(epoch=0, global_step=step)
-        optimizer.zero_grad()
-
-        if step % t_interval == 0:
-            guidance_output = guidance(
-                latent,
-                prompt_processor(), **batch, test_info=True, rgb_as_latents=True,
-                call_with_defined_noise=noise_pred
-            )
-
-        loss = 0.5 * F.mse_loss(latent, guidance_output['target_latent'].detach(), reduction="mean")
-        loss.backward()
-        optimizer.step()
-        noise_pred = guidance_output["noise_pred"]
-
-        if step % 5 == 0:
-            rgb = guidance.decode_latents(latent).permute(0, 2, 3, 1)
-            img_rgb = rgb.clamp(0, 1).detach().squeeze(0).cpu().numpy()
-
-            fig, ax = plt.subplots(1, 4, figsize=(20, 5))
-            ax[0].imshow(img_rgb)
-            ax[1].imshow(guidance_output["target"].cpu().numpy())
-            ax[2].imshow(guidance_output["noisy_img"].cpu().numpy())
-            ax[3].imshow(guidance_output["noise_img"].cpu().numpy())
-            ax[0].set_title('Current Image')
-            ax[1].set_title('Target Image')
-            ax[2].set_title('Noisy Image')
-            ax[3].set_title('Noise')
-            ax[0].axis('off')
-            ax[1].axis('off')
-            ax[2].axis('off')
-            ax[3].axis('off')
-            clear_output(wait=True)
-            plt.show()
-            img_array.append(figure2image(fig))
-except KeyboardInterrupt:
-    pass
-finally:
-    # browse the result
-    print("Optimizing process:")
-    images = img_array
-
-    if len(images) > 0:
-        # Set up the widgets
-        slider = IntSlider(min=0, max=len(images) - 1, step=1, value=1)
-        output = Output()
-
-        def display_image(index):
-            with output:
-                output.clear_output(wait=True)
-                display(images[index])
+    gc.collect()
+    with torch.no_grad():
+        torch.cuda.empty_cache()
+    w, h = config['latent']['width'], config['latent']['height']
 
 
-        # Link the slider to the display function
-        interact(display_image, index=slider)
+    # Initialization
+    time = torch.tensor(B * [999], device=guidance.device)
+    init_noise = torch.randn(B, 4, h, w, device=guidance.device) * guidance.scheduler.init_noise_sigma
+    noise_pred, _, _ = guidance.predict_noise(
+        init_noise,
+        time,
+        prompt_processor(),
+        **batch,
+        guidance_scale=config['guidance']['guidance_scale']
+    )
+    latents_denoised = guidance.get_x0(init_noise, noise_pred, time).detach()
+    latent = nn.Parameter(latents_denoised)
 
-        # Display the widgets
-        # display(slider)
-        display(output)
+    optimizer = torch.optim.Adam([latent], lr=lr, weight_decay=0)
+    num_steps = config['max_iters']
+    t_interval = n_iters // t_n_steps
+    img_array = []
+
+    try:
+        for step in tqdm(range(num_steps + 1)):
+            guidance.update_step(epoch=0, global_step=step)
+            optimizer.zero_grad()
+
+            if step % t_interval == 0:
+                guidance_output = guidance(
+                    latent,
+                    prompt_processor(), **batch, test_info=True, rgb_as_latents=True,
+                    call_with_defined_noise=noise_pred
+                )
+            
+            loss = 0.5 * F.mse_loss(latent, guidance_output['target_latent'].detach(), reduction="mean")
+            loss.backward()
+            optimizer.step()
+            noise_pred = guidance_output["noise_pred"]
+            
+            if step % 50 == 0:
+                rgb = guidance.decode_latents(latent).permute(0, 2, 3, 1)
+                img_rgb = rgb.clamp(0, 1).detach().squeeze(0).cpu().numpy()
+
+                fig, ax = plt.subplots(1, 4, figsize=(20, 5))
+                ax[0].imshow(img_rgb)
+                ax[1].imshow(guidance_output["target"].cpu().numpy())
+                ax[2].imshow(guidance_output["noisy_img"].cpu().numpy())
+                ax[3].imshow(guidance_output["noise_img"].cpu().numpy())
+                ax[0].set_title('Current Image')
+                ax[1].set_title('Target Image')
+                ax[2].set_title('Noisy Image')
+                ax[3].set_title('Noise')
+                ax[0].axis('off')
+                ax[1].axis('off')
+                ax[2].axis('off')
+                ax[3].axis('off')
+                clear_output(wait=True)
+                plt.show()
+                img_array.append(figure2image(fig))
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt")
+        pass
+    finally:
+        print("Done!")
+
+if __name__ == "__main__":
+    main()

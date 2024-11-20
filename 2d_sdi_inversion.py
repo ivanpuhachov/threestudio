@@ -139,7 +139,7 @@ def main():
     num_steps = config['max_iters']
     t_interval = n_iters // t_n_steps
     img_array = []
-    os.makedirs("logs/2d_sdi_kappa/", exist_ok=True)
+    os.makedirs("logs/2d_sdi_inversion/", exist_ok=True)
 
     try:
         for step in tqdm(range(num_steps + 1)):
@@ -148,14 +148,13 @@ def main():
 
             if step % t_interval == 0:
                 guidance_output = guidance(
-                    latent,
-                    prompt_processor(), **batch, test_info=True, rgb_as_latents=True,
-                    call_with_defined_noise=noise_pred
+                    guidance.decode_latents(latent).permute(0, 2, 3, 1), # project through the decoder to regulirize the latents
+                    prompt_processor(), **batch, test_info=True # rgb_as_latents=True, 
                 )
             
             loss = 0.5 * F.mse_loss(latent, guidance_output['target_latent'].detach(), reduction="mean")
             loss.backward()
-
+            # guidance_output["loss_sdi"].backward()
             optimizer.step()
             noise_pred = guidance_output["noise_pred"]
             
@@ -177,7 +176,7 @@ def main():
                 ax[2].axis('off')
                 ax[3].axis('off')
                 clear_output(wait=True)
-                plt.savefig(f"logs/2d_sdi_kappa/{step}.png")
+                plt.savefig(f"logs/2d_sdi_inversion/{step}.png")
                 plt.close()
                 # plt.show()
                 # img_array.append(figure2image(fig))

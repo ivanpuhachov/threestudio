@@ -132,6 +132,7 @@ def main():
     num_steps = config['max_iters']
     t_interval = n_iters // t_n_steps
     img_array = []
+    os.makedirs("logs/2d_sdi_kappa/", exist_ok=True)
 
     try:
         for step in tqdm(range(num_steps + 1)):
@@ -149,7 +150,6 @@ def main():
             loss.backward()
             optimizer.step()
             noise_pred = guidance_output["noise_pred"]
-            os.makedirs(f"logs/2d_sdi_kappa", exist_ok=True)
             
             if step % t_interval == 0:
                 rgb = guidance.decode_latents(latent).permute(0, 2, 3, 1)
@@ -174,7 +174,6 @@ def main():
                 # plt.show()
                 # img_array.append(figure2image(fig))
     except KeyboardInterrupt:
-        print("KeyboardInterrupt")
         pass
     finally:
         print("Done!")

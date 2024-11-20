@@ -136,7 +136,9 @@ def main():
     with torch.no_grad():
         params = guidance.decode_latents(latents_denoised).permute(0, 2, 3, 1)  # B, H, W, C
         assert params.shape == (1, 512, 512, 3)
-    params = nn.Parameter(params)
+        print("params shape: ", params.shape)
+        print("params range: ", params.min(), params.max())
+    params = nn.Parameter(torch.asin(2*params-1))
 
     optimizer = torch.optim.Adam([params], lr=lr, weight_decay=0)
     num_steps = config['max_iters']
@@ -148,15 +150,16 @@ def main():
         for step in tqdm(range(num_steps + 1)):
             guidance.update_step(epoch=0, global_step=step)
             optimizer.zero_grad()
+            rgb = 0.5 * torch.sin(params) + 0.5
 
             if step % t_interval == 0:
                 with torch.no_grad():
                     guidance_output = guidance(
-                        params,
+                        rgb,
                         prompt_processor(), **batch, test_info=True # rgb_as_latents=True, 
                     )
             
-            latent = guidance.encode_images(params.permute(0, 3, 1, 2))
+            latent = guidance.encode_images(rgb.permute(0, 3, 1, 2))
             loss = 0.5 * F.mse_loss(latent, guidance_output['target_latent'].detach(), reduction="mean")
             loss.backward()
             # guidance_output["loss_sdi"].backward()
@@ -164,8 +167,7 @@ def main():
             noise_pred = guidance_output["noise_pred"]
             
             if step % t_interval == 0:
-                rgb = guidance.decode_latents(latent).permute(0, 2, 3, 1)
-                img_rgb = rgb.clamp(0, 1).detach().squeeze(0).cpu().numpy()
+                img_rgb = rgb.detach().squeeze(0).cpu().numpy()
 
                 fig, ax = plt.subplots(1, 4, figsize=(20, 5))
                 ax[0].imshow(img_rgb)

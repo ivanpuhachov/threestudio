@@ -149,8 +149,9 @@ def main():
             loss.backward()
             optimizer.step()
             noise_pred = guidance_output["noise_pred"]
+            os.makedirs(f"logs/2d_sdi_kappa", exist_ok=True)
             
-            if step % 50 == 0:
+            if step % t_interval == 0:
                 rgb = guidance.decode_latents(latent).permute(0, 2, 3, 1)
                 img_rgb = rgb.clamp(0, 1).detach().squeeze(0).cpu().numpy()
 
@@ -168,8 +169,10 @@ def main():
                 ax[2].axis('off')
                 ax[3].axis('off')
                 clear_output(wait=True)
-                plt.show()
-                img_array.append(figure2image(fig))
+                plt.savefig(f"logs/2d_sdi_kappa/{step}.png")
+                plt.close()
+                # plt.show()
+                # img_array.append(figure2image(fig))
     except KeyboardInterrupt:
         print("KeyboardInterrupt")
         pass
